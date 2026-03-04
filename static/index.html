@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MpoxNet-V — Skin Lesion Classifier</title>
+<style>
+  :root {
+    --navy:  #1A3C6E;
+    --blue:  #2563A8;
+    --green: #1A6E3C;
+    --red:   #C0392B;
+    --amber: #D97706;
+    --bg:    #F0F4F8;
+    --card:  #FFFFFF;
+    --text:  #1A1A2E;
+    --muted: #6B7280;
+    --border:#D1D5DB;
+    --high:  #FEE2E2;
+    --med:   #FEF3C7;
+    --low:   #D1FAE5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+
+  header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
+    color: white; padding: 24px 40px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  header h1 { font-size: 1.8rem; font-weight: 700; }
+  header p  { font-size: 0.85rem; opacity: 0.8; margin-top: 4px; }
+  .badge {
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 999px; padding: 4px 12px; font-size: 0.75rem;
+  }
+
+  main { max-width: 1000px; margin: 32px auto; padding: 0 24px; }
+
+  .card {
+    background: var(--card); border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    padding: 28px; margin-bottom: 24px;
+  }
+  .card h2 { font-size: 1.1rem; color: var(--navy); margin-bottom: 16px; border-bottom: 2px solid var(--blue); padding-bottom: 8px; }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--blue); border-radius: 10px;
+    padding: 48px 24px; text-align: center; cursor: pointer;
+    transition: all 0.2s; position: relative;
+    background: rgba(37,99,168,0.03);
+  }
+  .upload-zone:hover, .upload-zone.drag { background: rgba(37,99,168,0.08); border-color: var(--navy); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-zone .icon { font-size: 3rem; margin-bottom: 12px; }
+  .upload-zone p { color: var(--muted); font-size: 0.9rem; }
+  .upload-zone strong { color: var(--blue); }
+
+  #preview-wrap { margin-top: 16px; display: none; text-align: center; }
+  #preview-wrap img { max-height: 220px; border-radius: 8px; border: 2px solid var(--border); }
+
+  .btn {
+    background: linear-gradient(135deg, var(--navy), var(--blue));
+    color: white; border: none; border-radius: 8px;
+    padding: 12px 32px; font-size: 0.95rem; font-weight: 600;
+    cursor: pointer; width: 100%; margin-top: 16px;
+    transition: opacity 0.2s;
+  }
+  .btn:hover   { opacity: 0.9; }
+  .btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+
+  /* Results */
+  #result-card { display: none; }
+
+  .prediction-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px; border-radius: 8px; margin-bottom: 20px;
+  }
+  .pred-class { font-size: 1.6rem; font-weight: 700; }
+  .pred-conf  { font-size: 1rem; color: var(--muted); }
+
+  .risk-HIGH   { background: var(--high); border-left: 5px solid var(--red);   }
+  .risk-MEDIUM { background: var(--med);  border-left: 5px solid var(--amber); }
+  .risk-LOW    { background: var(--low);  border-left: 5px solid var(--green); }
+  .risk-badge {
+    padding: 4px 14px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
+  }
+  .badge-HIGH   { background: var(--red);   color: white; }
+  .badge-MEDIUM { background: var(--amber); color: white; }
+  .badge-LOW    { background: var(--green); color: white; }
+
+  .rec-box {
+    background: #EBF3FB; border-radius: 8px; padding: 12px 16px;
+    font-size: 0.9rem; margin-bottom: 20px; border-left: 4px solid var(--blue);
+  }
+
+  .prob-row { margin-bottom: 10px; }
+  .prob-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px; }
+  .prob-bar { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
+  .prob-fill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+  .fill-top    { background: linear-gradient(90deg, var(--navy), var(--blue)); }
+  .fill-other  { background: var(--border); }
+
+  .gate-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px;
+  }
+  .gate-box {
+    background: #F8FAFC; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; text-align: center;
+  }
+  .gate-box .val { font-size: 1.4rem; font-weight: 700; color: var(--blue); }
+  .gate-box .lbl { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  .spinner {
+    display: none; text-align: center; padding: 24px;
+    color: var(--muted); font-size: 0.9rem;
+  }
+  .spinner::before {
+    content: ""; display: block; width: 40px; height: 40px;
+    border: 4px solid var(--border); border-top-color: var(--blue);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-box {
+    background: var(--high); border: 1px solid var(--red); border-radius: 8px;
+    padding: 12px 16px; color: var(--red); font-size: 0.9rem; display: none;
+  }
+
+  .api-links { display: flex; gap: 10px; flex-wrap: wrap; }
+  .api-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--navy); color: white; border-radius: 6px;
+    padding: 8px 16px; font-size: 0.85rem; text-decoration: none;
+    transition: opacity 0.2s;
+  }
+  .api-link:hover { opacity: 0.85; }
+  .api-link.outline { background: transparent; border: 2px solid var(--navy); color: var(--navy); }
+
+  .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .info-box { background: #F8FAFC; border-radius: 8px; padding: 14px; border: 1px solid var(--border); }
+  .info-box .val { font-size: 1.2rem; font-weight: 700; color: var(--navy); }
+  .info-box .lbl { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  @media (max-width: 600px) {
+    header { flex-direction: column; text-align: center; }
+    .gate-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🔬 MpoxNet-V</h1>
+    <p>Dual-Branch Vision Transformer — Monkeypox Skin Lesion Classification</p>
+  </div>
+  <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+    <span class="badge">DeiT-B + EfficientNetB4</span>
+    <span class="badge">MSLD v2.0</span>
+    <span class="badge">6 Classes</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Info strip -->
+  <div class="card">
+    <div class="info-grid">
+      <div class="info-box"><div class="val">107M</div><div class="lbl">Model Parameters</div></div>
+      <div class="info-box"><div class="val">755</div><div class="lbl">Training Images (MSLD v2.0)</div></div>
+      <div class="info-box"><div class="val">6</div><div class="lbl">Disease Classes</div></div>
+      <div class="info-box"><div class="val">93.71%</div><div class="lbl">SOTA Baseline (SwinTransformer)</div></div>
+      <div class="info-box"><div class="val">5-Fold CV</div><div class="lbl">Evaluation Protocol</div></div>
+      <div class="info-box"><div class="val">Vega Audited</div><div class="lbl">Dataset Quality Verified</div></div>
+    </div>
+  </div>
+
+  <!-- Upload + Predict -->
+  <div class="card">
+    <h2>🖼️ Classify Skin Lesion Image</h2>
+
+    <div class="upload-zone" id="drop-zone">
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp">
+      <div class="icon">📤</div>
+      <p><strong>Click to upload</strong> or drag & drop</p>
+      <p>JPEG / PNG / WebP — max 10MB</p>
+    </div>
+
+    <div id="preview-wrap">
+      <img id="preview" src="" alt="Preview">
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+
+    <button class="btn" id="predict-btn" disabled onclick="runPredict()">
+      🔍 Classify Image
+    </button>
+  </div>
+
+  <!-- Spinner -->
+  <div class="spinner" id="spinner">Classifying — running MpoxNet-V inference...</div>
+
+  <!-- Results -->
+  <div class="card" id="result-card">
+    <h2>📊 Classification Results</h2>
+
+    <div class="prediction-header" id="pred-header">
+      <div>
+        <div class="pred-class" id="pred-class">—</div>
+        <div class="pred-conf" id="pred-conf">—</div>
+      </div>
+      <span class="risk-badge" id="risk-badge">—</span>
+    </div>
+
+    <div class="rec-box" id="rec-box">—</div>
+
+    <h3 style="font-size:0.9rem;color:var(--muted);margin-bottom:12px;">ALL CLASS PROBABILITIES</h3>
+    <div id="prob-bars"></div>
+
+    <div class="gate-row">
+      <div class="gate-box">
+        <div class="val" id="gate-alpha">—</div>
+        <div class="lbl">α — DeiT-B Weight (Global Attention)</div>
+      </div>
+      <div class="gate-box">
+        <div class="val" id="gate-beta">—</div>
+        <div class="lbl">β — EfficientNetB4 Weight (Local Texture)</div>
+      </div>
+    </div>
+
+    <p style="font-size:0.75rem;color:var(--muted);margin-top:16px;">
+      ⚠️ For research use only. This tool does not replace clinical diagnosis or PCR testing.
+    </p>
+  </div>
+
+  <!-- API Links -->
+  <div class="card">
+    <h2>🔗 API Endpoints</h2>
+    <div class="api-links">
+      <a class="api-link" href="/docs" target="_blank">📖 Swagger UI</a>
+      <a class="api-link" href="/redoc" target="_blank">📋 ReDoc</a>
+      <a class="api-link outline" href="/health" target="_blank">❤️ Health Check</a>
+      <a class="api-link outline" href="/predict/classes" target="_blank">📦 Class Labels</a>
+      <a class="api-link outline" href="/train/status" target="_blank">📈 Train Status</a>
+    </div>
+    <div style="margin-top:16px;background:#1E293B;border-radius:8px;padding:16px;font-family:monospace;font-size:0.82rem;color:#94A3B8;">
+      <span style="color:#64B5F6;">POST</span> /predict<br>
+      <span style="color:#94A3B8;">  Content-Type: multipart/form-data</span><br>
+      <span style="color:#94A3B8;">  Body: file=&lt;image&gt;</span><br><br>
+      <span style="color:#64B5F6;">POST</span> /train/start<br>
+      <span style="color:#94A3B8;">  Body: {"data_dir": "./data/MSLD_v2", "num_folds": 5}</span>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const fileInput  = document.getElementById("file-input");
+const dropZone   = document.getElementById("drop-zone");
+const preview    = document.getElementById("preview");
+const previewWrap= document.getElementById("preview-wrap");
+const predictBtn = document.getElementById("predict-btn");
+const spinner    = document.getElementById("spinner");
+const resultCard = document.getElementById("result-card");
+const errorBox   = document.getElementById("error-box");
+let selectedFile = null;
+
+function showError(msg) {
+  errorBox.textContent = "❌ " + msg;
+  errorBox.style.display = "block";
+}
+function hideError() { errorBox.style.display = "none"; }
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) selectFile(fileInput.files[0]);
+});
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("drag");
+  if (e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]);
+});
+
+function selectFile(file) {
+  selectedFile = file;
+  hideError();
+  const reader = new FileReader();
+  reader.onload = e => {
+    preview.src = e.target.result;
+    previewWrap.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+  predictBtn.disabled = false;
+  resultCard.style.display = "none";
+}
+
+async function runPredict() {
+  if (!selectedFile) return;
+  hideError();
+  spinner.style.display = "block";
+  resultCard.style.display = "none";
+  predictBtn.disabled = true;
+
+  const fd = new FormData();
+  fd.append("file", selectedFile);
+
+  try {
+    const res  = await fetch("/predict", { method: "POST", body: fd });
+    const data = await res.json();
+
+    if (!res.ok) {
+      showError(data.detail || "Prediction failed.");
+      return;
+    }
+
+    // Populate results
+    const risk = data.clinical_risk;
+    const header = document.getElementById("pred-header");
+    header.className = "prediction-header risk-" + risk;
+
+    document.getElementById("pred-class").textContent = data.prediction;
+    document.getElementById("pred-conf").textContent  = "Confidence: " + data.confidence_pct;
+
+    const rb = document.getElementById("risk-badge");
+    rb.textContent  = risk + " RISK";
+    rb.className    = "risk-badge badge-" + risk;
+
+    document.getElementById("rec-box").textContent = "💊 " + data.recommendation;
+
+    // Probability bars
+    const barsDiv = document.getElementById("prob-bars");
+    barsDiv.innerHTML = "";
+    data.all_probabilities.forEach((p, i) => {
+      const isTop = i === 0;
+      barsDiv.innerHTML += `
+        <div class="prob-row">
+          <div class="prob-label">
+            <span>${p.label}</span>
+            <span>${p.percentage}</span>
+          </div>
+          <div class="prob-bar">
+            <div class="prob-fill ${isTop ? "fill-top" : "fill-other"}"
+                 style="width:${p.percentage}"></div>
+          </div>
+        </div>`;
+    });
+
+    // Gate weights
+    if (data.gate_alpha != null) {
+      document.getElementById("gate-alpha").textContent = (data.gate_alpha * 100).toFixed(1) + "%";
+      document.getElementById("gate-beta").textContent  = (data.gate_beta  * 100).toFixed(1) + "%";
+    }
+
+    resultCard.style.display = "block";
+  } catch (e) {
+    showError("Network error: " + e.message);
+  } finally {
+    spinner.style.display = "none";
+    predictBtn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
