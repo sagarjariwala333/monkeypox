@@ -1,0 +1,9 @@
+{
+    "data_dir": "./archive/Original Images/Original Images",
+    "num_folds": 5,
+    "batch_size": 16,
+    "num_classes": 2,
+    "phase1_epochs": 5,
+    "phase2_epochs": 13,
+    "phase3_epochs": 42
+}

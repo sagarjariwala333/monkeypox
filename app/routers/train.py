@@ -23,7 +23,7 @@ SAVE_DIR = Path("./saved_models")
 SAVE_DIR.mkdir(exist_ok=True)
 
 
-async def _run_training(cfg: dict):
+def _run_training(cfg: dict):
     """Background task: runs full 5-fold training."""
     try:
         from utils.dataset import get_kfold_loaders, compute_class_weights
